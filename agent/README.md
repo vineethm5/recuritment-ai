@@ -11,3 +11,5 @@
 5. **Install a new package:** **`uv add [package_name]`**
 
 6. **Run the agent in development mode:** **`uv run agent.py dev`**
+
+7. **To kill agent**: `sudo fuser -k 8081/tcp`
