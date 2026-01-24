@@ -1,4 +1,4 @@
-# H1 Instruction To Follow 
+# Instruction To Follow 
 1. **To kill agent**: `sudo fuser -k 8081/tcp`
 
 2. **To Generate api secret**: `openssl rand -base64 32`
@@ -7,7 +7,7 @@
 ```
 lk sip inbound create \
   --name "inbound-calls" \
-  --numbers "agent" \
+  --numbers "agent" \ 
 ```
 4. **To view trunk** : `lk sip inbound list`
 
