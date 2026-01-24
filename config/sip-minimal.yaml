@@ -1,0 +1,23 @@
+server:
+  host: "0.0.0.0"
+  port: 5060
+  realm: "sip.livekit.local"
+
+rtp:
+  port_range_start: 10000
+  port_range_end: 20000
+
+dtmf: "rfc2833"
+
+codecs:
+  pcmu: true
+
+livekit:
+  url: "ws://localhost:7880"
+  api_key: "APIe5ea27b80c9f4c5"
+  api_secret: "SECRETUGicrPXBnKpGqKTwH4CH2rU9Dp7N5tW75Q7zLh"
+
+agent:
+  name: "reena-agent"
+
+log_level: "info"

@@ -1,0 +1,19 @@
+api_key: LKN1BLYENDHFD2MW
+api_secret: 58f27c86b0fb03658296fe94b6b30f7ad7dc0d6ad3e3b882b7672bf0785af3eb
+ws_url: ws://127.0.0.1:7880
+redis:
+  address: 127.0.0.1:6379
+sip_port: 5060
+rtp_port: 10000-20000
+use_external_ip: false
+flood_protection: false
+rate_limiting: false
+trunks:
+  - number: "1000"
+    inbound_numbers: ["1000"]
+    # Optional: Add if you want authentication
+    auth:
+      username: "1000"
+      password: "livekit123"
+logging:
+  level: debug

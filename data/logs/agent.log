@@ -1,0 +1,27 @@
+2026-01-15 13:06:31,881 - __main__ - INFO - 🚀 Starting LiveKit Agent
+2026-01-15 13:06:31,882 - livekit.agents - INFO - starting worker
+{"message": "starting worker", "level": "INFO", "name": "livekit.agents", "version": "1.2.18", "rtc-version": "1.0.18", "timestamp": "2026-01-15T13:06:31.882720+00:00"}
+2026-01-15 13:06:31,882 - livekit.agents - INFO - preloading plugins
+{"message": "preloading plugins", "level": "INFO", "name": "livekit.agents", "packages": ["av"], "timestamp": "2026-01-15T13:06:31.882820+00:00"}
+2026-01-15 13:06:31,955 - livekit.agents - INFO - initializing process
+{"message": "initializing process", "level": "INFO", "name": "livekit.agents", "pid": 2018445, "timestamp": "2026-01-15T13:06:31.955515+00:00"}
+2026-01-15 13:06:31,956 - livekit.agents - INFO - initializing process
+{"message": "initializing process", "level": "INFO", "name": "livekit.agents", "pid": 2018447, "timestamp": "2026-01-15T13:06:31.956160+00:00"}
+2026-01-15 13:06:31,957 - livekit.agents - INFO - initializing process
+{"message": "initializing process", "level": "INFO", "name": "livekit.agents", "pid": 2018449, "timestamp": "2026-01-15T13:06:31.957083+00:00"}
+2026-01-15 13:06:31,958 - livekit.agents - INFO - initializing process
+{"message": "initializing process", "level": "INFO", "name": "livekit.agents", "pid": 2018451, "timestamp": "2026-01-15T13:06:31.958220+00:00"}
+2026-01-15 13:06:32,590 - asyncio - DEBUG - Using selector: EpollSelector
+2026-01-15 13:06:32,590 - livekit.agents - INFO - process initialized
+{"message": "process initialized", "level": "INFO", "name": "livekit.agents", "pid": 2018451, "elapsed_time": 0.63, "timestamp": "2026-01-15T13:06:32.590852+00:00"}
+2026-01-15 13:06:32,591 - asyncio - DEBUG - Using selector: EpollSelector
+2026-01-15 13:06:32,591 - livekit.agents - INFO - process initialized
+{"message": "process initialized", "level": "INFO", "name": "livekit.agents", "pid": 2018449, "elapsed_time": 0.63, "timestamp": "2026-01-15T13:06:32.591799+00:00"}
+2026-01-15 13:06:32,596 - livekit.agents - INFO - process initialized
+{"message": "process initialized", "level": "INFO", "name": "livekit.agents", "pid": 2018445, "elapsed_time": 0.64, "timestamp": "2026-01-15T13:06:32.596354+00:00"}
+2026-01-15 13:06:32,596 - asyncio - DEBUG - Using selector: EpollSelector
+2026-01-15 13:06:32,598 - livekit.agents - INFO - process initialized
+{"message": "process initialized", "level": "INFO", "name": "livekit.agents", "pid": 2018447, "elapsed_time": 0.64, "timestamp": "2026-01-15T13:06:32.598720+00:00"}
+2026-01-15 13:06:32,598 - asyncio - DEBUG - Using selector: EpollSelector
+2026-01-15 13:06:32,602 - livekit.agents - INFO - registered worker
+{"message": "registered worker", "level": "INFO", "name": "livekit.agents", "id": "AW_URpfErqukQPk", "url": "ws://localhost:7880", "region": "", "protocol": 16, "timestamp": "2026-01-15T13:06:32.602319+00:00"}

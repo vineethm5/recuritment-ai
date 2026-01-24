@@ -1,0 +1,50 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7.4
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    networks:
+      - livekit
+
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    depends_on:
+      - redis
+    command: ['--config', '/config/livekit.yaml']
+    volumes:
+      - /opt/greet/config/livekit.yaml:/config/livekit.yaml:ro
+    ports:
+      - '7880:7880'
+      - '7881:7881'
+      - '7882:7882'
+      - '50000-50100:50000-50100/udp'
+    networks:
+      - livekit
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  sip:
+    image: livekit/sip:latest
+    restart: unless-stopped
+    depends_on:
+      - livekit
+    network_mode: host
+    command: ['--config', '/config/sip.yaml']
+    volumes:
+      - /opt/greet/config/sip.yaml:/config/sip.yaml:ro
+    environment:
+      - LK_LOG_LEVEL=debug
+
+volumes:
+  redis_data:
+
+networks:
+  livekit:
+    driver: bridge

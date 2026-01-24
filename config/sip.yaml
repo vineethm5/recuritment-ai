@@ -1,0 +1,31 @@
+api_key: devkey
+api_secret: M1zLEZjWLAi25sLukWvQtAoCQoMLfSyC
+ws_url: ws://192.168.1.61:7880
+
+sip:
+  enabled: true
+  port: 5060
+  room_name: "inbound-calls"
+  create_room: true
+  empty_timeout: 300
+  trunks:
+    - name: asterisk
+      inbound_username: "agent"
+      inbound_password: ""
+
+redis:
+  address: 127.0.0.1:6379
+use_external_ip: false
+logging:
+  level: debug
+
+audio:
+  codecs:
+    - opus
+    - pcmu
+    - pcma
+rtc:
+  audio:
+    opus:
+      fec: false
+      dtx: true

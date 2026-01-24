@@ -1,0 +1,18 @@
+{
+  "dispatchRule": {
+    "name": "vicidial-dispatch",
+    "trunkIds": ["ST_DmBuMorrZHUi"],
+    "rule": {
+      "dispatchRuleIndividual": {
+        "roomPrefix": "voice-call-"
+      }
+    },
+    "roomConfig": {
+      "agents": [
+        {
+          "agentName": "Reena"
+        }
+      ]
+    }
+  }
+}
