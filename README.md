@@ -1,4 +1,4 @@
-# Instruction To Follow 
+## Instruction To Follow 
 1. **To kill agent**: `sudo fuser -k 8081/tcp`
 
 2. **To Generate api secret**: `openssl rand -base64 32`
@@ -23,7 +23,7 @@ lk sip dispatch create \
 7. **To view rooms**: `lk room list`
 
 
-# --------------- Vicibox Configuration ------------------------
+## --------------- Vicibox Configuration ---------------------
 
 **Add the below pjsip.conf**
 ```
