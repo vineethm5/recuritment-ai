@@ -21,3 +21,48 @@ lk sip dispatch create \
 6. **To view rule**: `lk sip dispatch list`
 
 7. **To view rooms**: `lk room list`
+
+
+# --------------- Vicibox Configuration ------------------------
+
+**Add the below pjsip.conf**
+```
+[transport-udp]
+type=transport
+protocol=udp
+bind=0.0.0.0:5060
+tos=ef
+
+[livekit-endpoint]
+type=endpoint
+transport=transport-udp
+context=from-livekit
+disallow=all
+allow=ulaw,alaw
+aors=livekit-aor
+direct_media=no
+rtp_symmetric=yes
+force_rport=yes
+rewrite_contact=yes
+from_user=agent
+from_domain=192.168.1.61
+
+[livekit-aor]
+type=aor
+contact=sip:192.168.1.61:5060
+qualify_frequency=0
+
+[livekit-identify]
+type=identify
+endpoint=livekit-endpoint
+match=192.168.1.61
+
+```
+
+**And the extension.conf**
+```
+exten => 9000,1,NoOp(Call to LiveKit Agent)
+ same => n,Dial(PJSIP/agent@livekit-endpoint,30)
+ same => n,Hangup()
+
+```
