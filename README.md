@@ -23,7 +23,8 @@ lk sip dispatch create \
 7. **To view rooms**: `lk room list`
 
 
-## --------------- Vicibox Configuration ---------------------
+# ---------------------------------------
+## Vicibox Configuration
 
 **Add the below pjsip.conf**
 ```
@@ -66,3 +67,24 @@ exten => 9000,1,NoOp(Call to LiveKit Agent)
  same => n,Hangup()
 
 ```
+
+
+graph TD
+    A[User Voice] -->|Audio Stream| B(VAD: Silero)
+    B -->|Speech Detected| C(STT: Deepgram)
+    C -->|Text/Transcription| D{Agent Brain: LLM}
+    
+    D -->|Decision: Needs Data| E[Tool/Function Call]
+    E -->|Database/API Result| D
+    
+    D -->|Final Response| F(TTS: Cartesia/OpenAI)
+    F -->|Audio Stream| G[User Speaker]
+
+    subgraph "Latency Optimization"
+    C
+    D
+    F
+    end
+
+    style D fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333
