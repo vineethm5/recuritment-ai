@@ -1,4 +1,4 @@
-![alt text](Untitled-new1111.png)
+![alt text](arch-new.png)
 
 ## Instruction To Follow 
 1. **To kill agent**: `sudo fuser -k 8081/tcp`
