@@ -1,3 +1,4 @@
+# H1 Instruction To Follow 
 1. **To kill agent**: `sudo fuser -k 8081/tcp`
 
 2. **To Generate api secret**: `openssl rand -base64 32`
@@ -10,7 +11,7 @@ lk sip inbound create \
 ```
 4. **To view trunk** : `lk sip inbound list`
 
-5. **To create dispatch rule**:
+5. **To create dispatch rule**: 
 ```
 lk sip dispatch create \
   --name "vicidial-dispatch" \
