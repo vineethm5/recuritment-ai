@@ -1,3 +1,5 @@
+[alt text](<Untitled-2025-12-03-2137 -new.png>)
+
 ## Instruction To Follow 
 1. **To kill agent**: `sudo fuser -k 8081/tcp`
 
@@ -69,22 +71,3 @@ exten => 9000,1,NoOp(Call to LiveKit Agent)
 ```
 
 
-graph TD
-    A[User Voice] -->|Audio Stream| B(VAD: Silero)
-    B -->|Speech Detected| C(STT: Deepgram)
-    C -->|Text/Transcription| D{Agent Brain: LLM}
-    
-    D -->|Decision: Needs Data| E[Tool/Function Call]
-    E -->|Database/API Result| D
-    
-    D -->|Final Response| F(TTS: Cartesia/OpenAI)
-    F -->|Audio Stream| G[User Speaker]
-
-    subgraph "Latency Optimization"
-    C
-    D
-    F
-    end
-
-    style D fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#bbf,stroke:#333
