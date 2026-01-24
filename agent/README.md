@@ -1,4 +1,13 @@
-uv init to initiate
-uv sync to download add dependency that are in pyprojeect.tom
-uv add [package_name] to install new package
-uv run agent.py dev : to run agent
+### **Quick Start Guide**
+
+1. **Create a virtual environment:** **`python3 -m venv .venv`** or **`uv venv`**
+
+2. **Activate the environment:** **`source .venv/bin/activate`**
+
+3. **Initiate the project:** **`uv init`**
+
+4. **Download/Sync dependencies from pyproject.toml:** **`uv sync`**
+
+5. **Install a new package:** **`uv add [package_name]`**
+
+6. **Run the agent in development mode:** **`uv run agent.py dev`**
