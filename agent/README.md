@@ -20,3 +20,15 @@ sudo lsof -i :8081
 sudo netstat -tulpn | grep :8081
 sudo ss -tulpn | grep :8081
 ``
+
+
+
+[ai]
+exten => 9000,1,NoOp(Call to LiveKit Agent)
+ ;same => n,Dial(PJSIP/livekit-endpoint/sip:agent@192.168.1.61,30)
+ same => n,Set(VENDOR_LEAD_CODE=${CALLERID(name)})
+ same => n,AGI(agi-test.pl,${VENDOR_LEAD_CODE},60)  ; 60 = max wait seconds
+ same => n,Set(PJSIP_HEADER(add,X-Candidate-Name)=${LEAD_FIRST_NAME})
+ same => n,Dial(PJSIP/agent@livekit-endpoint,30)
+ same => n,Hangup()
+
