@@ -13,3 +13,10 @@
 6. **Run the agent in development mode:** **`uv run agent.py dev`**
 
 7. **To kill agent**: `sudo fuser -k 8081/tcp`
+
+8. **Find what's using port 8081**
+``
+sudo lsof -i :8081
+sudo netstat -tulpn | grep :8081
+sudo ss -tulpn | grep :8081
+``
