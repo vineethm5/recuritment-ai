@@ -1,18 +1,12 @@
 {
-  "dispatchRule": {
-    "name": "vicidial-dispatch",
-    "trunkIds": ["ST_DmBuMorrZHUi"],
+  "dispatch_rule": {
+    "name": "vicidial-use-metadata",
+    "trunk_ids": ["ST_T77KhWb2uEh6"],
     "rule": {
-      "dispatchRuleIndividual": {
-        "roomPrefix": "voice-call-"
+      "dispatchRuleDirect": {
+        "roomName": "vici-metadata-test"
       }
     },
-    "roomConfig": {
-      "agents": [
-        {
-          "agentName": "Kavya"
-        }
-      ]
-    }
+    "metadata": "{{sip.header.X-VC-Payload}}"
   }
 }
