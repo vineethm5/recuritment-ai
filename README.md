@@ -79,3 +79,46 @@ listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144
 X-VC-Payload: V1301303390000000380
 X-VC-Payload: V1301303390000000380
 ```
+
+
+## Running Python file as service
+
+```
+Existing Path: sudo nano /etc/systemd/system/api.service
+
+```
+
+**Service Code**
+
+```
+[Unit]
+Description=AI Voice Agent FastAPI Service
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/opt/greet/agent
+# If you are using a virtual environment, change /usr/bin/python3
+# to /opt/greet/agent/venv/bin/python3
+ExecStart=/usr/bin/python3 /opt/greet/agent/receive-api.py
+Restart=always
+# Optional: Add environment variables if needed
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+
+```
+**Commands to Enable,Start,Stop and For check Status**
+```
+sudo systemctl enable api.service
+sudo systemctl start api.service
+sudo systemctl stop api.service
+sudo systemctl status api.service
+```
+**Commands to check Error Log**
+```
+journalctl -u api.service -n 50 --no-pager
+
+```
