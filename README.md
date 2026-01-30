@@ -70,3 +70,12 @@ exten => 9000,1,NoOp(Call to LiveKit Agent)
 ```
 
 
+**Command to check whether, headrs values are passing form vici**
+``
+root@livekit:/opt/greet ## tcpdump -An -s0 -i any port 5060 | grep X-VC-Payload
+tcpdump: data link type LINUX_SLL2
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
+X-VC-Payload: V1301303390000000380
+X-VC-Payload: V1301303390000000380
+```
