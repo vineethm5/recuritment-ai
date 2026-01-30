@@ -1,12 +1,12 @@
 {
   "dispatch_rule": {
-    "name": "vicidial-use-metadata",
-    "trunk_ids": ["ST_T77KhWb2uEh6"],
+    "name": "vicidial-dispatch",
+    "trunk_ids": ["ST_arSPwUFVz4qc"],
+    "metadata": "{{sip.header.X-VC-Payload}}",
     "rule": {
       "dispatchRuleDirect": {
-        "roomName": "vici-metadata-test"
+        "roomName": "vici-inbound"
       }
-    },
-    "metadata": "{{sip.header.X-VC-Payload}}"
+    }
   }
 }

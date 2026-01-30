@@ -22,7 +22,6 @@ sudo ss -tulpn | grep :8081
 ``
 
 
-
 [ai]
 exten => 9000,1,NoOp(Call to LiveKit Agent)
  ;same => n,Dial(PJSIP/livekit-endpoint/sip:agent@192.168.1.61,30)
@@ -31,4 +30,6 @@ exten => 9000,1,NoOp(Call to LiveKit Agent)
  same => n,Set(PJSIP_HEADER(add,X-Candidate-Name)=${LEAD_FIRST_NAME})
  same => n,Dial(PJSIP/agent@livekit-endpoint,30)
  same => n,Hangup()
+
+
 

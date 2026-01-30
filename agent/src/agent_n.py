@@ -1,10 +1,10 @@
 import redis
+import aiohttp
 from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
     JobContext,
-    RunContext,
     cli,
 )
 from livekit.plugins import silero, deepgram, openai, cartesia
@@ -18,78 +18,59 @@ import json
 load_dotenv()
 
 print(Path.cwd())
-# 1. Initialize Redis (Connects to your Sandbox)
-# decode_responses=True ensures we get back text (strings) not bytes
-r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
+r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 server = AgentServer()
 logger = logging.getLogger("livekit.agents")
 
 @server.rtc_session()
 async def entrypoint(ctx: JobContext):
-    await ctx.connect() # Ensure connection to room
+    await ctx.connect()
     
-    # Wait for the SIP participant to join
     participant = await ctx.wait_for_participant()
-    await asyncio.sleep(0.5)
-
-    # Log all attributes to debug
-    logger.info(f"All participant attributes: {participant.attributes}")
-    
-    # Try to get the X-VC-Payload header
-    payload_encoded = None
-    possible_keys = [
-        "sip.header.X-VC-Payload",
-        "sip.header.x-vc-payload",
-        "X-VC-Payload",
-        "x-vc-payload",
-        "vcPayload"
-    ]
-    
-    for key in possible_keys:
-        if key in participant.attributes:
-            payload_encoded = participant.attributes[key]
-            logger.info(f"✓ Found payload at key: {key}")
+    vici_unique_id = None
+    for _ in range(6): 
+        vici_unique_id = participant.attributes.get("vici_id")
+        if vici_unique_id:
             break
+        await asyncio.sleep(0.5)
+        # Refresh participant data
+        participant = ctx.room.participants.get(participant.sid)
+
+    logger.info(f"--- FINAL VICI ID: {vici_unique_id} ---")
+    logger.info(f"--- ALL ATTRS: {participant.attributes} ---")
     
-    # Decode the payload if found
-    candidate_name = "Guest"  # Default
-    vici_unique_id = participant.attributes.get("sip.phoneNumber")
+    # Default values
+    candidate_name = ""
+    lead_id = ""
     
-    if payload_encoded:
+    # Fetch data from FastAPI endpoint
+    if vici_unique_id:
         try:
-            # Decode base64
-            payload_json = base64.b64decode(payload_encoded).decode('utf-8')
-            payload_data = json.loads(payload_json)
-            
-            logger.info(f"✓ Successfully decoded payload: {payload_data}")
-            
-            # Extract candidate name from payload
-            candidate_name = payload_data.get('fn', 'Guest')
-            logger.info(f"✓ Candidate name from payload: {candidate_name}")
-            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"http://192.168.1.61:9001/get-data/{vici_unique_id}", timeout=aiohttp.ClientTimeout(total=2)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        candidate_name = data.get('field_1', '')
+                        lead_id = data.get('field_2', '')
+                        logger.info(f"✓ Successfully fetched data from API")
+                        logger.info(f"✓ Candidate name: {candidate_name}")
+                        logger.info(f"✓ Lead ID: {lead_id}")
+                    else:
+                        logger.warning(f"API returned status {resp.status}")
         except Exception as e:
-            logger.error(f"✗ Error decoding payload: {e}")
-            logger.error(f"Raw payload value: {payload_encoded}")
-    else:
-        logger.warning("✗ X-VC-Payload header not found in attributes")
-        logger.info(f"Available keys: {list(participant.attributes.keys())}")
+            logger.error(f"Error fetching data from API: {e}")
     
-    logger.info(f"--- VICI UNIQUE ID: {vici_unique_id} ---")
-    logger.info(f"--- CANDIDATE NAME: {candidate_name} ---")
-    
-    # 2. Fetch the FIRST STEP from Redis to start the call
+    # Fetch Redis script steps
     start_step = r.hgetall("step:1")
     first_line = start_step.get("text", "Hello?")
     
-    # System instructions
     system_instructions = (
         "You are Kavya, an outbound recruitment assistant for Greet Technologies. "
         "Engage politely and professionally. Always respond with numbers in words. "
         "Here is your primary recruitment script flow: \n"
     )
 
-    # Fetch all steps from Redis
     all_steps = ""
     for i in range(1, 15):
         text = r.hget(f"step:{i}", "text")
@@ -112,10 +93,23 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Start the call with personalized greeting
+    # Start with personalized greeting
     personalized_line = first_line.replace("{{consumer_name}}", candidate_name)
-    
     await session.generate_reply(instructions=f"Start the call by saying: {personalized_line}")
+    
+    # Optional: Clean up data after call
+    @ctx.room.on("participant_disconnected")
+    def on_disconnect(participant):
+        asyncio.create_task(cleanup_data(vici_unique_id))
+    
+async def cleanup_data(unique_id):
+    """Clean up call data after the call ends"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            await session.delete(f"http://192.168.1.61:9001/clear-data/{unique_id}")
+            logger.info(f"Cleaned up data for {unique_id}")
+    except Exception as e:
+        logger.error(f"Error cleaning up data: {e}")
 
 if __name__ == "__main__":
     cli.run_app(server)

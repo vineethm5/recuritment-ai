@@ -8,6 +8,20 @@ sip:
   room_name: "inbound-calls"
   create_room: true
   empty_timeout: 300
+
+  variable_substitution: true
+  allowed_headers:
+    - "X-VC-Payload"
+    - "X-VC-Campaign"
+    - "X-VC-Lead-ID"
+    - "X-VC-Phone"
+  metadata_templates:
+    caller: "{{.caller}}"
+    called: "{{.called}}"
+    from: "{{.from.address}}"
+    to: "{{.to.address}}"
+    vc_payload: '{{index .headers "X-VC-Payload"}}'
+    
   trunks:
     - name: asterisk
       inbound_username: "agent"

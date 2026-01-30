@@ -1,0 +1,10 @@
+{
+  "trunk":{
+    "name": "asterisk-trunk",
+    "numbers": ["agent"],
+    "allowed_addresses": ["192.168.1.63/32"],
+    "headers_to_attributes": {
+      "X-VC-Payload": "vici_id"
+    }
+  }
+}
