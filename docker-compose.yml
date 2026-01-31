@@ -47,9 +47,24 @@ services:
     environment:
       - LK_LOG_LEVEL=debug
 
-volumes:
-  redis_data:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_vici
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: secretpassword
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - livekit
 
 networks:
   livekit:
     driver: bridge
+
+volumes:
+  redis_data:
+  mongo_data:
