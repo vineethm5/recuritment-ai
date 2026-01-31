@@ -1,6 +1,13 @@
 import redis
 import aiohttp
+import logging
+import asyncio
+import datetime
+import os
+from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
+
+from livekit import api
 from livekit.agents import (
     Agent,
     AgentServer,
@@ -10,14 +17,11 @@ from livekit.agents import (
     ConversationItemAddedEvent
 )
 from livekit.plugins import silero, deepgram, openai, cartesia
-from dotenv import load_dotenv
-import logging
-import asyncio
-import datetime
+
 load_dotenv()
 
-# MongoDB Setup
-MONGO_URL = "mongodb://admin:secretpassword@localhost:27017/?authSource=admin"
+# --- Configurations ---
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://admin:secretpassword@localhost:27017/?authSource=admin")
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client.asterisk
 transcript_collection = db.conversation_history
@@ -26,91 +30,167 @@ r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 server = AgentServer()
 logger = logging.getLogger("livekit.agents")
 
-# --- Helper Functions (Outside entrypoint) ---
-# async def save_to_mongo(data):
-#     """Async helper to save transcript to MongoDB"""
-#     try:
-#         await transcript_collection.insert_one(data)
-#     except Exception as e:
-#         logger.error(f"❌ Mongo Save Error: {e}")
+# --- Helper Functions ---
 
+async def start_recording(room_name, vici_id):
+    """Triggers Egress and updates MongoDB with metadata"""
+    url = os.getenv('LIVEKIT_URL', "").replace('ws', 'http')
+    
+    lkapi = api.LiveKitAPI(
+        url,
+        os.getenv('LIVEKIT_API_KEY'),
+        os.getenv('LIVEKIT_API_SECRET')
+    )
+
+    filename = f"{vici_id}.mp3"
+    
+    try:
+        file_out = api.EncodedFileOutput(
+            file_type=api.EncodedFileType.MP3,
+            filepath=f"/out/{filename}"
+        )
+
+        request = api.RoomCompositeEgressRequest(
+            room_name=room_name,
+            audio_only=True,
+            file_outputs=[file_out]
+        )
+
+        response = await lkapi.egress.start_room_composite_egress(request)
+        egress_id = getattr(response, 'egress_id', 'unknown_id')
+
+        # Update Mongo with Recording Info
+        await transcript_collection.update_one(
+            {"call_id": vici_id},
+            {
+                "$set": {
+                    "egress_id": egress_id,
+                    "recording_file": filename,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
+        logger.info(f"🔴 Egress started: {egress_id} for {vici_id}")
+        return egress_id
+    except Exception as e:
+        logger.error(f"❌ Egress Error for {vici_id}: {e}")
+    finally:
+        await lkapi.aclose()
 
 async def save_message_to_call(data):
-    # Now 'data' is the whole dictionary
-    filter_query = {"call_id": data["vici_id"]} 
-    
-    update_data = {
-        "$push": {
-            "messages": {
-                "role": data["role"],
-                "text": data["text"],
-                "timestamp": datetime.datetime.utcnow()
+    """Saves individual chat turns to MongoDB"""
+    await transcript_collection.update_one(
+        {"call_id": data["vici_id"]},
+        {
+            "$push": {
+                "messages": {
+                    "role": data["role"],
+                    "text": data["text"],
+                    "timestamp": datetime.datetime.utcnow()
+                }
+            },
+            "$setOnInsert": {
+                "created_at": datetime.datetime.utcnow(),
+                "name": data["name"],
+                "phone_no": data["phone_no"],
+                "room": data["room"],
+                "status": "active",
             }
         },
-        "$setOnInsert": {
-            "created_at": datetime.datetime.utcnow(),
-            "name":data["name"],
-            "phone_no":data["phone_no"],
-            "room": data["room"], # Optional: save the room name too
-            "status": "active",
-            
-        }
-    }
+        upsert=True
+    )
 
-    await transcript_collection.update_one(filter_query, update_data, upsert=True)
+async def generate_call_summary(vici_id):
+    """Fetches transcript from Mongo and generates an AI summary/recommendation"""
+    call_data = await transcript_collection.find_one({"call_id": vici_id})
+    if not call_data or "messages" not in call_data:
+        logger.warning(f"⚠️ No transcript found for summary: {vici_id}")
+        return
 
+    transcript_text = "\n".join([f"{m['role']}: {m['text']}" for m in call_data["messages"]])
 
+    # Simple LLM call for summary
+    llm = openai.LLM(model="gpt-4o")
+    prompt = (
+        f"You are a recruitment assistant. Summarize this call for {call_data.get('name')}.\n"
+        f"Transcript:\n{transcript_text}\n\n"
+        "Provide a short summary and a 'Hire' or 'No-Hire' recommendation."
+    )
     
-async def cleanup_data(unique_id):
-    """Clean up call data after the call ends"""
     try:
-        async with aiohttp.ClientSession() as session:
-            await session.delete(f"http://192.168.1.61:9001/clear-data/{unique_id}")
-            logger.info(f"Cleaned up data for {unique_id}")
+        # We use a simple chat completion for the summary
+        res = await llm.chat(prompt=prompt)
+        summary = res.choices[0].message.content
+        
+        await transcript_collection.update_one(
+            {"call_id": vici_id},
+            {"$set": {"ai_summary": summary}}
+        )
+        logger.info(f"✅ AI Summary generated for {vici_id}")
     except Exception as e:
-        logger.error(f"Error cleaning up data: {e}")
+        logger.error(f"❌ Summary Error: {e}")
+
+async def cleanup_call(vici_id):
+    """Finalizes database and triggers post-call processing"""
+    try:
+        # 1. External API Cleanup
+        async with aiohttp.ClientSession() as session:
+            await session.delete(f"http://192.168.1.61:9001/clear-data/{vici_id}")
+        
+        # 2. Update status to completed
+        await transcript_collection.update_one(
+            {"call_id": vici_id},
+            {"$set": {"status": "completed", "ended_at": datetime.datetime.utcnow()}}
+        )
+        
+        # 3. Generate AI Summary
+        await generate_call_summary(vici_id)
+        logger.info(f"🏁 Finished all post-call tasks for {vici_id}")
+    except Exception as e:
+        logger.error(f"❌ Cleanup Error: {e}")
+
+# --- Agent Entrypoint ---
 
 @server.rtc_session()
 async def entrypoint(ctx: JobContext):
     await ctx.connect()
     
+    # 1. Identify Participant and Vici ID
     participant = await ctx.wait_for_participant()
     vici_unique_id = None
-    for _ in range(6): 
+    for _ in range(10): 
         vici_unique_id = participant.attributes.get("vici_id")
-        if vici_unique_id:
-            break
+        if vici_unique_id: break
         await asyncio.sleep(0.5)
         participant = ctx.room.participants.get(participant.sid)
 
-    # Data fetching logic
+    # 2. Fetch Lead Data
     candidate_name = "Candidate"
-    lead_id = vici_unique_id or "Unknown"
+    phone_no = "Unknown"
     
     if vici_unique_id:
+        # Start recording immediately in background
+        asyncio.create_task(start_recording(ctx.room.name, vici_unique_id))
+        
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"http://192.168.1.61:9001/get-data/{vici_unique_id}", timeout=aiohttp.ClientTimeout(total=2)) as resp:
+                async with session.get(f"http://192.168.1.61:9001/get-data/{vici_unique_id}", timeout=2) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        candidate_name = data.get('field_1')
-                        lead_id = data.get('field_2')
-                        phone_no = data.get('field_3')
+                        candidate_name = data.get('field_1', "Candidate")
+                        phone_no = data.get('field_3', "Unknown")
         except Exception as e:
-            logger.error(f"Error fetching data: {e}")
+            logger.error(f"Data Fetch Error: {e}")
 
-    # Script Preparation
-    start_step = r.hgetall("step:1")
-    first_line = start_step.get("text", "Hello?")
+    # 3. Build Script
     all_steps = "".join([f"Step {i}: {r.hget(f'step:{i}', 'text')}\n" for i in range(1, 15) if r.hget(f"step:{i}", "text")])
-
     system_instructions = (
         "You are Kavya, an outbound recruitment assistant for Greet Technologies. "
-        "Engage politely and professionally. Always respond with numbers in words. "
-        "Here is your primary recruitment script flow: \n" + all_steps
+        "Engage politely. Respond with numbers in words. Flow: \n" + all_steps
     )
 
-    # Define Agent and Session
+    # 4. Setup AI Pipeline
     agent = Agent(instructions=system_instructions)
     session = AgentSession(
         vad=silero.VAD.load(),
@@ -119,34 +199,31 @@ async def entrypoint(ctx: JobContext):
         tts=cartesia.TTS(model="sonic-english", voice="95d51f79-c397-46f9-b49a-23763d3eaa2d"),
     )
 
-    # --- Conversation Logger Event ---
     @session.on("conversation_item_added")
     def on_item_added(event: ConversationItemAddedEvent):
-        item = event.item
-        if item.text_content:
+        if event.item.text_content:
             log_entry = {
-                "vici_id": lead_id,
+                "vici_id": vici_unique_id or "Unknown",
                 "phone_no": phone_no,
                 "name": candidate_name,
-                "role": item.role,
-                "text": item.text_content,
-                "timestamp": asyncio.get_event_loop().time(),
+                "role": event.item.role,
+                "text": event.item.text_content,
                 "room": ctx.room.name
             }
             asyncio.create_task(save_message_to_call(log_entry))
-            logger.info(f"💾 Logged {item.role}: {item.text_content[:30]}...")
 
-    # --- Start the session once ---
     await session.start(agent=agent, room=ctx.room)
 
-    # Personalized Greeting
+    # Greet user
+    first_line = r.hget("step:1", "text") or "Hello?"
     personalized_line = first_line.replace("{{consumer_name}}", candidate_name)
-    await session.generate_reply(instructions=f"Start the call by saying: {personalized_line}")
+    await session.generate_reply(instructions=f"Say exactly: {personalized_line}")
     
+    # 5. Handle Disconnect
     @ctx.room.on("participant_disconnected")
     def on_disconnect(p):
         if vici_unique_id:
-            asyncio.create_task(cleanup_data(vici_unique_id))
+            asyncio.create_task(cleanup_call(vici_unique_id))
 
 if __name__ == "__main__":
     cli.run_app(server)
