@@ -6,6 +6,7 @@ import datetime
 import os
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
+import base64
 
 from livekit import api
 from livekit.agents import (
@@ -17,14 +18,15 @@ from livekit.agents import (
     ConversationItemAddedEvent
 )
 from livekit.plugins import silero, deepgram, openai, cartesia
+from openai import OpenAI
 
 load_dotenv()
 
 # --- Configurations ---
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://admin:secretpassword@localhost:27017/?authSource=admin")
 mongo_client = AsyncIOMotorClient(MONGO_URL)
-db = mongo_client.asterisk
-transcript_collection = db.conversation_history
+db = mongo_client.asterisk #db
+transcript_collection = db.conversation_history #table
 
 r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 server = AgentServer()
@@ -101,35 +103,7 @@ async def save_message_to_call(data):
         upsert=True
     )
 
-async def generate_call_summary(vici_id):
-    """Fetches transcript from Mongo and generates an AI summary/recommendation"""
-    call_data = await transcript_collection.find_one({"call_id": vici_id})
-    if not call_data or "messages" not in call_data:
-        logger.warning(f"⚠️ No transcript found for summary: {vici_id}")
-        return
 
-    transcript_text = "\n".join([f"{m['role']}: {m['text']}" for m in call_data["messages"]])
-
-    # Simple LLM call for summary
-    llm = openai.LLM(model="gpt-4o")
-    prompt = (
-        f"You are a recruitment assistant. Summarize this call for {call_data.get('name')}.\n"
-        f"Transcript:\n{transcript_text}\n\n"
-        "Provide a short summary and a 'Hire' or 'No-Hire' recommendation."
-    )
-    
-    try:
-        # We use a simple chat completion for the summary
-        res = await llm.chat(prompt=prompt)
-        summary = res.choices[0].message.content
-        
-        await transcript_collection.update_one(
-            {"call_id": vici_id},
-            {"$set": {"ai_summary": summary}}
-        )
-        logger.info(f"✅ AI Summary generated for {vici_id}")
-    except Exception as e:
-        logger.error(f"❌ Summary Error: {e}")
 
 async def cleanup_call(vici_id):
     """Finalizes database and triggers post-call processing"""
@@ -143,9 +117,7 @@ async def cleanup_call(vici_id):
             {"call_id": vici_id},
             {"$set": {"status": "completed", "ended_at": datetime.datetime.utcnow()}}
         )
-        
-        # 3. Generate AI Summary
-        await generate_call_summary(vici_id)
+
         logger.info(f"🏁 Finished all post-call tasks for {vici_id}")
     except Exception as e:
         logger.error(f"❌ Cleanup Error: {e}")
