@@ -1,0 +1,16 @@
+{
+"dispatch_rule": 
+{
+  "name": "Vicidial Transfer Rule",
+  "trunk_ids": ["ST_5oPz3JBMGjbM"],
+  "rule": {
+    "dispatchRuleDirect": {
+      "roomName": "" 
+    }
+  },
+  "metadata": "Routes transfers to Vicidial Asterisk",
+  "attributes": {
+    "outbound_number_regex": ".*"
+  }
+}
+}

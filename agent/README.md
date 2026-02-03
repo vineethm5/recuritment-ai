@@ -31,5 +31,16 @@ exten => 9000,1,NoOp(Call to LiveKit Agent)
  same => n,Dial(PJSIP/agent@livekit-endpoint,30)
  same => n,Hangup()
 
+Vici external hangup
+
+        Hangs up the call. Use this when the user says goodbye or wants to end the conversation.
+        """
+        logger.info(f"Hanging up via Vicidial API and Room Deletion for {vici_unique_id}")
+        
+        vici_api_url = "http://192.168.1.63/agc/api.php"
+        params = {
+            "source": "test", "user": "1111", "pass": "1111",
+            "agent_user": "1111", "function": "external_hangup", "value": "1"
+        }
 
 

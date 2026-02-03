@@ -5,9 +5,10 @@ ws_url: ws://192.168.1.61:7880
 sip:
   enabled: true
   port: 5060
-  room_name: "inbound-calls"
+  room_name: "vici-inbound"
   create_room: true
   empty_timeout: 300
+  allow_transfers: true
 
   variable_substitution: true
   allowed_headers:

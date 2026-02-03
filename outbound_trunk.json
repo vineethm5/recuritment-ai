@@ -1,0 +1,9 @@
+{
+    "trunk":{
+            "name": "Vicidial_Transfer_Trunk",
+            "address": "192.168.1.63",
+            "numbers": ["1234"],
+            "auth_username": "",
+            "auth_password": ""
+    }
+}
