@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import base64
+from livekit.protocol.sip import TransferSIPParticipantRequest
 
 from livekit import api
 from livekit.agents import (
@@ -146,28 +147,43 @@ async def entrypoint(ctx: JobContext):
     @function_tool
     async def transfer_to_agent():
         """
-        Transfers the caller to a live human representative. 
-        Use this if the user asks for a person, manager, or human.
+        Transfers the caller to a live human representative in Vicidial. 
         """
-        logger.info(f"Trigerring SIP Transfer for {vici_unique_id}")
+        logger.info(f"Initiating SIP REFER transfer for {participant.identity} to Vicidial")
+        
         try:
-            # Standard SIP REFER transfer
-            await participant.transfer(destination="12345")
-            return "Please hold while I connect you to a representative."
+            # According to the docs, 'tel:' or 'sip:' prefixes are required
+            # Since you are dialing a local extension on your Vicidial IP:
+            transfer_target = "sip:1234@192.168.1.63" 
+
+            transfer_request = TransferSIPParticipantRequest(
+                participant_identity=participant.identity,
+                room_name=ctx.room.name,
+                transfer_to=transfer_target,
+                play_dialtone=False
+            )
+
+            # Use the exact method name from the official docs
+            await lk_api.sip.transfer_sip_participant(transfer_request)
+            
+            logger.info(f"SIP REFER sent successfully for {vici_unique_id}")
+            
+            # The docs mention the caller leaves the room automatically, 
+            # but we'll shut down the agent session locally to be safe.
+            asyncio.create_task(ctx.room.disconnect())
+            
+            return "I am connecting you to a representative now. Please stay on the line."
+
         except Exception as e:
-            logger.error(f"Transfer error: {e}")
-            return "I'm having trouble connecting you. One moment please."
+            logger.error(f"Transfer error using TransferSIPParticipantRequest: {e}")
+            return "I'm sorry, I'm having trouble transferring your call. Please wait a moment."
 
     @function_tool
     async def end_call():
-        
         try:
-            # 1. Hit Vicidial API
-            async with aiohttp.ClientSession() as http_session:
-                await http_session.get(vici_api_url, params=params, timeout=5)
-            
-            # 2. Hard Hangup: Delete the room to force SIP BYE
+            # 1. Hard Hangup: Delete the room to force SIP BYE
             await lk_api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+            logger.info("The call has been ended good bye")
         except Exception as e:
             logger.error(f"End call error: {e}")
             await ctx.room.disconnect()
