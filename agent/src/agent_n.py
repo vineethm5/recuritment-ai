@@ -15,7 +15,8 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     cli,
-    ConversationItemAddedEvent
+    ConversationItemAddedEvent,
+    function_tool # Added this
 )
 from livekit.plugins import silero, deepgram, openai, cartesia
 from openai import OpenAI
@@ -25,8 +26,8 @@ load_dotenv()
 # --- Configurations ---
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://admin:secretpassword@localhost:27017/?authSource=admin")
 mongo_client = AsyncIOMotorClient(MONGO_URL)
-db = mongo_client.asterisk #db
-transcript_collection = db.conversation_history #table
+db = mongo_client.asterisk 
+transcript_collection = db.conversation_history 
 
 r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 server = AgentServer()
@@ -122,29 +123,63 @@ async def cleanup_call(vici_id):
     except Exception as e:
         logger.error(f"❌ Cleanup Error: {e}")
 
-# --- Agent Entrypoint ---
-
 @server.rtc_session()
 async def entrypoint(ctx: JobContext):
     await ctx.connect()
     
-    # 1. Identify Participant and Vici ID
+    # Initialize API Client for SIP and Room Management
+    lk_api = api.LiveKitAPI(
+        os.getenv('LIVEKIT_URL', "").replace('ws', 'http'),
+        os.getenv('LIVEKIT_API_KEY'),
+        os.getenv('LIVEKIT_API_SECRET')
+    )
+
     participant = await ctx.wait_for_participant()
     vici_unique_id = None
     for _ in range(10): 
         vici_unique_id = participant.attributes.get("vici_id")
         if vici_unique_id: break
         await asyncio.sleep(0.5)
-        participant = ctx.room.participants.get(participant.sid)
 
-    # 2. Fetch Lead Data
+    # --- Integrated Tools ---
+
+    @function_tool
+    async def transfer_to_agent():
+        """
+        Transfers the caller to a live human representative. 
+        Use this if the user asks for a person, manager, or human.
+        """
+        logger.info(f"Trigerring SIP Transfer for {vici_unique_id}")
+        try:
+            # Standard SIP REFER transfer
+            await participant.transfer(destination="12345")
+            return "Please hold while I connect you to a representative."
+        except Exception as e:
+            logger.error(f"Transfer error: {e}")
+            return "I'm having trouble connecting you. One moment please."
+
+    @function_tool
+    async def end_call():
+        
+        try:
+            # 1. Hit Vicidial API
+            async with aiohttp.ClientSession() as http_session:
+                await http_session.get(vici_api_url, params=params, timeout=5)
+            
+            # 2. Hard Hangup: Delete the room to force SIP BYE
+            await lk_api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+        except Exception as e:
+            logger.error(f"End call error: {e}")
+            await ctx.room.disconnect()
+            
+        return "The call has ended. Goodbye."
+
+    # --- Fetch Lead Data ---
     candidate_name = "Candidate"
     phone_no = "Unknown"
     
     if vici_unique_id:
-        # Start recording immediately in background
         asyncio.create_task(start_recording(ctx.room.name, vici_unique_id))
-        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"http://192.168.1.61:9001/get-data/{vici_unique_id}", timeout=2) as resp:
@@ -155,21 +190,32 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logger.error(f"Data Fetch Error: {e}")
 
-    # 3. Build Script
+    # --- Setup AI Pipeline ---
     all_steps = "".join([f"Step {i}: {r.hget(f'step:{i}', 'text')}\n" for i in range(1, 15) if r.hget(f"step:{i}", "text")])
+    
     system_instructions = (
         "You are Kavya, an outbound recruitment assistant for Greet Technologies. "
-        "Engage politely. Respond with numbers in words. Flow: \n" + all_steps
+        "Engage politely. Respond with numbers in words. \n"
+        "If the user wants a human/agent, call transfer_to_agent. "
+        "If the user is finished, call end_call.\n"
+        "Flow: \n" + all_steps
     )
 
-    # 4. Setup AI Pipeline
-    agent = Agent(instructions=system_instructions)
+    # Register tools with the Agent
+    agent = Agent(
+        instructions=system_instructions,
+        tools=[transfer_to_agent, end_call] 
+    )
+
     session = AgentSession(
         vad=silero.VAD.load(),
         stt=deepgram.STT(),
         llm=openai.LLM(model="gpt-4o"),
         tts=cartesia.TTS(model="sonic-english", voice="95d51f79-c397-46f9-b49a-23763d3eaa2d"),
     )
+
+    # Ensure API client closes on session end
+    ctx.add_shutdown_callback(lk_api.aclose)
 
     @session.on("conversation_item_added")
     def on_item_added(event: ConversationItemAddedEvent):
@@ -186,12 +232,11 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Greet user
+    # Personalized Greet
     first_line = r.hget("step:1", "text") or "Hello?"
     personalized_line = first_line.replace("{{consumer_name}}", candidate_name)
-    await session.generate_reply(instructions=f"Say exactly: {personalized_line}")
+    await session.generate_reply(instructions=f"Greet the user by saying exactly: {personalized_line}")
     
-    # 5. Handle Disconnect
     @ctx.room.on("participant_disconnected")
     def on_disconnect(p):
         if vici_unique_id:
