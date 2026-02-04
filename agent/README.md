@@ -21,7 +21,7 @@ sudo netstat -tulpn | grep :8081
 sudo ss -tulpn | grep :8081
 ``
 
-
+``
 [ai]
 exten => 9000,1,NoOp(Call to LiveKit Agent)
  ;same => n,Dial(PJSIP/livekit-endpoint/sip:agent@192.168.1.61,30)
@@ -31,7 +31,9 @@ exten => 9000,1,NoOp(Call to LiveKit Agent)
  same => n,Dial(PJSIP/agent@livekit-endpoint,30)
  same => n,Hangup()
 
-Vici external hangup
+``
+
+***Vici external hangup**
 
         Hangs up the call. Use this when the user says goodbye or wants to end the conversation.
         """
@@ -44,3 +46,27 @@ Vici external hangup
         }
 
 
+
+
+**Add the outbound dispatch rule**
+```
+{
+    "trunk":{
+            "name": "Vicidial_Transfer_Trunk",
+            "address": "192.168.1.63",
+            "numbers": ["1234"],
+            "auth_username": "",
+            "auth_password": ""
+    }
+}
+
+```
+## This is the Inbound and dispatch rule
+```
+┌───────────────────┬────────────────────────┬─────────────────┬────────┬──────────────┬─────┬───────────────────────────────┬────────┐
+│ SipDispatchRuleID │ Name                   │ SipTrunks       │ Type   │ RoomName     │ Pin │ Attributes                    │ Agents │
+├───────────────────┼────────────────────────┼─────────────────┼────────┼──────────────┼─────┼───────────────────────────────┼────────┤
+│ SDR_ejfGp3zMBfym  │ vicidial-dispatch      │ ST_arSPwUFVz4qc │ Direct │ vici-inbound │     │ map[]                         │        │
+│ SDR_qnH7yLtAN4Z4  │ Vicidial Transfer Rule │ ST_5oPz3JBMGjbM │ Direct │              │     │ map[outbound_number_regex:.*] │        │
+└───────────────────┴────────────────────────┴─────────────────┴────────┴──────────────┴─────┴───────────────────────────────┴────────┘
+```
