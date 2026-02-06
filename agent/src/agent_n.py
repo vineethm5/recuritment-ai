@@ -124,6 +124,10 @@ async def cleanup_call(vici_id):
     except Exception as e:
         logger.error(f"❌ Cleanup Error: {e}")
 
+
+    
+
+# A decorator is a function that takes another function as input and returns a new function.
 @server.rtc_session()
 async def entrypoint(ctx: JobContext):
     await ctx.connect()
@@ -147,37 +151,55 @@ async def entrypoint(ctx: JobContext):
     @function_tool
     async def transfer_to_agent():
         """
-        Transfers the caller to a live human representative in Vicidial. 
+        Attempts to transfer the caller to a live representative.
+        If no agents are available, the conversation will continue.
         """
-        logger.info(f"Initiating SIP REFER transfer for {participant.identity} to Vicidial")
+        logger.info("Transfer request received. Checking agent availability...")
         
         try:
-            # According to the docs, 'tel:' or 'sip:' prefixes are required
-            # Since you are dialing a local extension on your Vicidial IP:
-            transfer_target = "sip:1234@192.168.1.63" 
+            vici_ext = '12345'
+            async with aiohttp.ClientSession() as session_http:
+                async with session_http.post(f"http://192.168.1.61:9001/liveagents/", timeout=3) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        vici_ext = data.get('ext')
+            
+            # 1. HANDLE NO AGENT
+            if not vici_ext or vici_ext == 'No agents available':
+                logger.info("No agents found. Informing user.")
+                # Returning this allows the LLM to speak it and keep the session alive
+                return ("I'm sorry, all of our specialists are currently busy. "
+                        "I can continue helping you, or we can chat later. What would you prefer?")
+
+            # 2. HANDLE AGENT FOUND
+            logger.info(f"Agent found at {vici_ext}. Speaking and then transferring...")
+            
+            # Use this internal helper to play the speech immediately
+            # This ensures the user hears "Connecting you..." before the SIP REFER hits
+            await session.generate_reply(instructions="Tell the user: 'One moment please, I am connecting you to a representative now.'")
+
+            # Small sleep to allow the TTS to finish speaking before the transfer
+            await asyncio.sleep(1) 
 
             transfer_request = TransferSIPParticipantRequest(
                 participant_identity=participant.identity,
                 room_name=ctx.room.name,
-                transfer_to=transfer_target,
-                play_dialtone=False
+                transfer_to=f"sip:{vici_ext}@192.168.1.63",
+                play_dialtone=True
             )
-
-            # Use the exact method name from the official docs
+            
             await lk_api.sip.transfer_sip_participant(transfer_request)
             
-            logger.info(f"SIP REFER sent successfully for {vici_unique_id}")
-            
-            # The docs mention the caller leaves the room automatically, 
-            # but we'll shut down the agent session locally to be safe.
+            # Disconnect the agent from the room AFTER transfer is initiated
             asyncio.create_task(ctx.room.disconnect())
             
-            return "I am connecting you to a representative now. Please stay on the line."
+            return "Transfer initiated." # Internal log for the LLM
 
         except Exception as e:
-            logger.error(f"Transfer error using TransferSIPParticipantRequest: {e}")
-            return "I'm sorry, I'm having trouble transferring your call. Please wait a moment."
+            logger.error(f"Transfer error: {e}")
+            return "I'm having trouble connecting to the team. Let's continue our conversation."
 
+            
     @function_tool
     async def end_call():
         try:
@@ -210,13 +232,14 @@ async def entrypoint(ctx: JobContext):
     all_steps = "".join([f"Step {i}: {r.hget(f'step:{i}', 'text')}\n" for i in range(1, 15) if r.hget(f"step:{i}", "text")])
     
     system_instructions = (
-        "You are Kavya, an outbound recruitment assistant for Greet Technologies. "
-        "Engage politely. Respond with numbers in words. \n"
-        "If the user wants a human/agent, call transfer_to_agent. "
-        "If the user is finished, call end_call.\n"
-        "Flow: \n" + all_steps
+    "You are Kavya, an outbound recruitment assistant for Greet Technologies. "
+    "Engage politely. Respond with numbers in words. \n"
+    "CRITICAL: When you call a tool (like transfer_to_agent), always report the "
+    "result or the message returned by the tool back to the user immediately.\n" # Add this
+    "If the user wants a human/agent, call transfer_to_agent. "
+    "If the user is finished, call end_call.\n"
+    "Flow: \n" + all_steps
     )
-
     # Register tools with the Agent
     agent = Agent(
         instructions=system_instructions,
