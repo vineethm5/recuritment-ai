@@ -70,3 +70,9 @@ exten => 9000,1,NoOp(Call to LiveKit Agent)
 │ SDR_qnH7yLtAN4Z4  │ Vicidial Transfer Rule │ ST_5oPz3JBMGjbM │ Direct │              │     │ map[outbound_number_regex:.*] │        │
 └───────────────────┴────────────────────────┴─────────────────┴────────┴──────────────┴─────┴───────────────────────────────┴────────┘
 ```
+
+
+
+use('asterisk'); // Your database name
+
+db.getCollection('conversation_history').deleteMany({});

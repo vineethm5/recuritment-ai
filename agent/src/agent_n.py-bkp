@@ -163,8 +163,7 @@ async def entrypoint(ctx: JobContext):
 
     all_steps = "".join([f"Step {i}: {r.hget(f'step:{i}', 'text')}\n" for i in range(1, 15) if r.hget(f"step:{i}", "text")])
 
-    system_instruction=(f" You are Kavya from Greet Technologies. You are interviewing {candidate_name}Be concise. If the user asks a personal question, answer it quickly then continue the script Tools: transfer_to_agent (for human requests), end_call (to hang up) If the user is finished Flow: \n" "CRITICAL: When you call a tool (like transfer_to_agent), always report the result or the message returned by the tool back to the user immediately.\n"
-    + all_steps )
+    system_instruction=(f" You are Kavya from Greet Technologies. You are interviewing {candidate_name}Be concise. If the user asks a personal question, answer it quickly then continue the script Tools: transfer_to_agent (for human requests), end_call (to hang up) If the user is finished Flow: \n" + all_steps )
 
     agent = Agent(instructions=system_instruction, 
     tools=[transfer_to_agent, end_call])

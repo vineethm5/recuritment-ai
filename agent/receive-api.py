@@ -83,5 +83,41 @@ async def clear_data(unique_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+@app.post("/liveagents")
+async def getliveagents():
+    try:
+        # 1. Added () to call the connection function
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                # 2. Fixed the SQL syntax (added ' after CLOSER and ) after the list)
+                query = """
+                    SELECT user, conf_exten 
+                    FROM vicidial_live_agents 
+                    WHERE status IN ('READY', 'CLOSER') 
+                    AND user != '1111' 
+                    LIMIT 1
+                """
+                cursor.execute(query)
+                row = cursor.fetchone()
+                
+                if not row:
+                    return {"user": None, "ext": "No agents available"}
+                
+                return {
+                    "user": row['user'],
+                    "ext": row['conf_exten']
+                }
+                
+    except Exception as e:
+        logger.error(f"Database error: {e}")
+        # Always return the error detail during debugging to see what's wrong
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9001)
+
+
