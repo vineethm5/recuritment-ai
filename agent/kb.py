@@ -4,7 +4,7 @@ rd = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 recruitment_steps = {
     "1": {"text": "Hi, may I speak with {{consumer_name}}?", "next": "2"},
-    "2": {"text": "This is Kavya from Greet Technologies. I found your profile on Naukri—are you currently exploring job opportunities?", "next": "3"},
+    "2": {"text": "This is {{recruiter_role}} from Greet Technologies. I found your profile on Naukri—are you currently exploring job opportunities?", "next": "3"},
     "3": {"text": "We're hiring for an Accounts Process Executive role. Would you like to know more?", "next": "4"},
     "4": {"text": "We are located in HSR Layout. Would it be convenient for you to commute to this location for work?", "next": "5"},
     "5": {

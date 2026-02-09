@@ -1,12 +1,17 @@
 {
   "dispatch_rule": {
     "name": "vicidial-dispatch",
-    "trunk_ids": ["ST_arSPwUFVz4qc"],
+    "trunk_ids": ["ST_HDALTSKYCPQR"],
     "metadata": "{{sip.header.X-VC-Payload}}",
     "rule": {
-      "dispatchRuleDirect": {
-        "roomName": "vici-inbound"
+      "dispatchRuleIndividual": {
+        "roomPrefix": "room-"
+        
       }
-    }
+    },
+    "roomConfig": {
+        "departure_timeout": 1,
+        "empty_timeout": 30
+      }
   }
 }

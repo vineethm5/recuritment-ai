@@ -2,7 +2,7 @@
 "dispatch_rule": 
 {
   "name": "Vicidial Transfer Rule",
-  "trunk_ids": ["ST_5oPz3JBMGjbM"],
+  "trunk_ids": ["ST_yU5wCgNbnh3j"],
   "rule": {
     "dispatchRuleDirect": {
       "roomName": "" 

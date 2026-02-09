@@ -20,8 +20,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     ConversationItemAddedEvent,
-    function_tool,
-    JobExecutorType
+    function_tool
 )
 from livekit.plugins import silero, deepgram, openai, cartesia
 from livekit.protocol.sip import TransferSIPParticipantRequest
@@ -39,10 +38,7 @@ db = mongo_client.asterisk
 transcript_collection = db.conversation_history 
 r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
-
-
-
-server = AgentServer(job_executor_type=JobExecutorType.THREAD)
+server = AgentServer()
 # --- LangGraph: Memory & State ---
 class KavyaState(TypedDict):
     messages: Annotated[List[dict], operator.add]
@@ -106,18 +102,6 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     lk_api = api.LiveKitAPI(os.getenv('LIVEKIT_URL', "").replace('ws', 'http'), os.getenv('LIVEKIT_API_KEY'), os.getenv('LIVEKIT_API_SECRET'))
 
-    res = await lk_api.room.list_rooms(api.ListRoomsRequest())
-    room_count = len(res.rooms)
-    print(f"Total Active Rooms: {room_count}")
-
-    me = (room_count%2)
-    if me == 0:
-        voice_id = "faf0731e-dfb9-4cfc-8119-259a79b27e12"
-        recruiter_role="Kavya"
-    else:        
-        voice_id = "87286a8d-7ea7-4235-a41a-dd9fa6630feb"
-        recruiter_role="Rohit"
-
     participant = await ctx.wait_for_participant()
     vici_unique_id = None
     for _ in range(10): 
@@ -135,42 +119,64 @@ async def entrypoint(ctx: JobContext):
                         data = await resp.json()
                         candidate_name, phone_no = data.get('field_1', "Candidate"), data.get('field_3', "Unknown")
                         logger.info(f'Candidate Name is:{candidate_name}')
-                        logger.info(f"New call connected: Room={ctx.room.name}")
         except Exception: pass
 
     state = {"messages": [], "step_index": 1, "vici_id": vici_unique_id or "Unknown", "candidate_name": candidate_name, "transfer_failed": False}
 
     @function_tool
     async def transfer_to_agent():
-        """ Call this ONLY if the user explicitly asks to speak to a real person, 
-        a human, a supervisor, or a specialist. """
+        """ Call this ONLY if the user explicitly asks to speak to a real person. """
         try:
-            vici_ext=''
+            # 1. Get the available agent extension from your API
+            vici_ext = ''
             async with aiohttp.ClientSession() as session_http:
-                async with session_http.post(f"http://192.168.1.61:9001/liveagents/", timeout=3) as resp:
+                async with session_http.post("http://192.168.1.61:9001/liveagents/", timeout=3) as resp:
                     data = await resp.json()
                     vici_ext = data.get('user')
-            logger.info(f"Transfering to the Human agent {vici_ext}")
-            if not vici_ext or vici_ext == 'No agents available':
-                state["transfer_failed"] = True
-                return "All agents busy. Continue interview."
 
-            await session.generate_reply(instructions="Say: 'Connecting you now.'")
+            if not vici_ext or vici_ext == 'No agents available':
+                logger.info("Transfer failed: No agents available.")
+                return "Currently, all our specialists are busy. Let's continue our conversation."
+
+            logger.info(f"Transferring to Human agent: {vici_ext}")
+
+            # 2. Inform the user
+            await session.generate_reply(instructions="Say: 'One moment, I am connecting you to a specialist now.'")
             await asyncio.sleep(2)
 
-            transfer_request = TransferSIPParticipantRequest(
-                participant_identity=participant.identity,
-                room_name=ctx.room.name,
-                transfer_to=f"sip:{vici_ext}@192.168.1.63",
-                play_dialtone=True
-            )
-           
-            await lk_api.sip.transfer_sip_participant(transfer_request)
-            asyncio.create_task(ctx.room.disconnect())
-            
-        except Exception:
-            state["transfer_failed"] = True
-            return "Error. Continue interview."
+            # 3. Initialize LiveKit API inside the function
+            # Ensure your ENV variables for LIVEKIT_API_KEY and SECRET are set
+            lk_api_client = api.LiveKitAPI() 
+
+            TRUNK_ID = "ST_5oPz3JBMGjbM" 
+            vici_did = "123456789" # This should be the DID routed to your In-Group
+
+            try:
+                # Create the SIP Participant (this dials Vicidial and bridges the audio)
+                await lk_api_client.sip.create_sip_participant(
+                    api.CreateSIPParticipantRequest(
+                        sip_trunk_id=TRUNK_ID,
+                        sip_call_to=vici_did,
+                        room_name=ctx.room.name, # Correctly referencing current room
+                        participant_identity=f"transfer_to_{vici_ext}",
+                        headers={"X-VC-Payload": vici_ext} # Passing agent ID to Vicidial
+                    )
+                )
+                logger.info("SIP Outbound Dial sent to Vicidial.")
+                
+                # 4. Wait a moment for the bridge to establish, then disconnect the AI
+                await asyncio.sleep(3)
+                await ctx.room.disconnect()
+                
+            except Exception as e:
+                logger.error(f"SIP Dial Error: {e}")
+                return "I'm having trouble connecting to the line. Let's continue here."
+            finally:
+                await lk_api_client.aclose()
+
+        except Exception as e:
+            logger.error(f"General Transfer Error: {e}")
+            return "Connection error. Let's continue our interview."
 
     @function_tool
     async def end_call():
@@ -180,7 +186,7 @@ async def entrypoint(ctx: JobContext):
 
     all_steps = "".join([f"Step {i}: {r.hget(f'step:{i}', 'text')}\n" for i in range(1, 15) if r.hget(f"step:{i}", "text")])
 
-    system_instruction=(f" You are {recruiter_role} from Greet Technologies. You are interviewing {candidate_name}Be concise. If the user asks a personal question, answer it quickly then continue the script Tools: transfer_to_agent (for human requests), end_call (to hang up) If the user is finished Flow: \n" "CRITICAL: When you call a tool (like transfer_to_agent), always report the result or the message returned by the tool back to the user immediately.\n"
+    system_instruction=(f" You are Kavya from Greet Technologies. You are interviewing {candidate_name}Be concise. If the user asks a personal question, answer it quickly then continue the script Tools: transfer_to_agent (for human requests), end_call (to hang up) If the user is finished Flow: \n" "CRITICAL: When you call a tool (like transfer_to_agent), always report the result or the message returned by the tool back to the user immediately.\n"
     + all_steps )
 
     agent = Agent(instructions=system_instruction, 
@@ -191,8 +197,7 @@ async def entrypoint(ctx: JobContext):
         vad=silero.VAD.load(),
         stt=deepgram.STT(),
         llm=openai.LLM(model="gpt-4o"),
-        tts=cartesia.TTS(model="sonic-english", voice=voice_id),
-        
+        tts=cartesia.TTS(model="sonic-english", voice="95d51f79-c397-46f9-b49a-23763d3eaa2d")
     )
 
     # FIX: Use synchronous wrappers for .on() events
@@ -218,7 +223,6 @@ async def entrypoint(ctx: JobContext):
     # ... [rest of your listeners] ...
 
     await session.start(agent=agent, room=ctx.room)
-    ctx.add_shutdown_callback(lambda: lk_api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name)))
     
     # Initial Greeting
     init_res = await graph_app.ainvoke(state)
