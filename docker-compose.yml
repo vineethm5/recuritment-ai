@@ -24,7 +24,7 @@ services:
       - redis
     command: ['--config', '/config/livekit.yaml']
     volumes:
-      - /opt/greet/config/livekit.yaml:/config/livekit.yaml:ro
+      - /opt/recuritment-ai/config/livekit.yaml:/config/livekit.yaml:ro
     ports:
       - '7880:7880'
       - '7881:7881'
@@ -43,7 +43,7 @@ services:
     network_mode: host
     command: ['--config', '/config/sip.yaml']
     volumes:
-      - /opt/greet/config/sip.yaml:/config/sip.yaml:ro
+      - /opt/recuritment-ai/config/sip.yaml:/config/sip.yaml:ro
     environment:
       - LK_LOG_LEVEL=debug
 
@@ -72,6 +72,8 @@ services:
         api_key: "${LIVEKIT_API_KEY}"
         api_secret: "${LIVEKIT_API_SECRET}"
         ws_url: ws://livekit:7880
+        template_base: http://localhost:7980/
+        file_results_dir: /out
         redis:
           address: redis:6379
     volumes:
